@@ -1,7 +1,7 @@
 import os
 
-ROOT = '/root/results/'
+ROOT = '/content/'
 
-evalsets_path = os.path.join(ROOT, 'bnp', 'evalsets')
+evalsets_path = os.path.join(ROOT, 'dnp', 'evalsets')
 datasets_path = os.path.join(ROOT, 'datasets')
-results_path = os.path.join(ROOT, 'bnp', 'results')
+results_path = os.path.join(ROOT, 'dnp', 'results')
