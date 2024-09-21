@@ -1,7 +1,6 @@
 import os
 import argparse
-from attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 import numpy as np
 import os.path as osp
 import yaml
@@ -109,7 +108,7 @@ def oracle(args, model):
 
         model.eval()
 
-        batch = AttrDict()
+        batch = Dict()
         indices_permuted = torch.randperm(yp.shape[1])
 
         batch.x = xp_[:, indices_permuted[:2*num_init], :]
@@ -221,7 +220,7 @@ def bo(args, model):
 
         model.eval()
 
-        batch = AttrDict()
+        batch = Dict()
 
         indices_permuted = torch.randperm(yp.shape[1])
 

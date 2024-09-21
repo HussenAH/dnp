@@ -10,8 +10,7 @@ import torch.nn as nn
 import math
 import time
 import matplotlib.pyplot as plt
-from attrdict import AttrDict
-from tqdm import tqdm
+from addict import Dict #from attrdict import AttrDictfrom tqdm import tqdm
 from copy import deepcopy
 
 from data.image import img_to_task, task_to_img
@@ -139,7 +138,7 @@ def train(args, model):
         ravg.reset()
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
-            ckpt = AttrDict()
+            ckpt = Dict()
             ckpt.model = model.state_dict()
             ckpt.optimizer = optimizer.state_dict()
             ckpt.scheduler = scheduler.state_dict()

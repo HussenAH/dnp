@@ -2,9 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import MultivariateNormal, StudentT
-# from attrdict import AttrDict
-from data._attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 import math
 
 __all__ = ['GPSampler', 'RBFKernel', 'PeriodicKernel', 'Matern52Kernel']
@@ -21,7 +19,7 @@ class GPSampler(object):
             x_range=(-2, 2),
             device='cpu'):
 
-        batch = AttrDict()
+        batch = Dict()
         num_ctx = num_ctx or torch.randint(low=3, high=max_num_points-3, size=[1]).item()
         num_tar = torch.randint(low=3, high=max_num_points-num_ctx, size=[1]).item()
 

@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-from attrdict import AttrDict
-
-from models.canp import CANP
+from addict import Dict #from attrdict import AttrDictfrom models.canp import CANP
 from utils.misc import stack, logmeanexp
 from utils.sampling import sample_with_replacement as SWR, sample_subset
 
@@ -48,7 +46,7 @@ class BANP(CANP):
             return py
 
     def forward(self, batch, num_samples=None, reduce_ll=True):
-        outs = AttrDict()
+        outs = Dict()
 
         def compute_ll(py, y):
             ll = py.log_prob(y).sum(-1)

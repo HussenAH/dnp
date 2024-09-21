@@ -4,8 +4,7 @@
 ###############
 
 from collections import UserDict
-# from attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 class AttrDict(UserDict):
     def __getattr__(self, key):
         return self.__getitem__(key)

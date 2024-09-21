@@ -1,8 +1,5 @@
 import torch
-# from attrdict import AttrDict
-from data._attrdict import AttrDict
-
-from torch.utils.data import DataLoader
+from addict import Dict #from attrdict import AttrDictfrom torch.utils.data import DataLoader
 from torch.distributions import StudentT, Normal
 
 def img_to_task(img, num_ctx=None,
@@ -19,7 +16,7 @@ def img_to_task(img, num_ctx=None,
 
     device = img.device if device is None else device
 
-    batch = AttrDict()
+    batch = Dict()
     max_num_points = max_num_points or num_pixels
     num_ctx = num_ctx or \
             torch.randint(low=3, high=max_num_points-3, size=[1]).item()

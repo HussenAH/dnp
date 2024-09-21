@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 from models.cnp import CNP
 from utils.misc import stack, logmeanexp
 from utils.sampling import sample_with_replacement as SWR, sample_subset
@@ -47,7 +46,7 @@ class BNP(CNP):
             return py
 
     def forward(self, batch, num_samples=None, reduce_ll=True):
-        outs = AttrDict()
+        outs = Dict()
 
         def compute_ll(py, y):
             ll = py.log_prob(y).sum(-1)

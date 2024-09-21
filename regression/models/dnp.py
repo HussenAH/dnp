@@ -6,8 +6,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 from torch.distributions import kl_divergence
-#from attrdict import AttrDict
-from data._attrdict import AttrDict
+from addict import Dict #from attrdict import AttrDict
 from utils.misc import stack, logmeanexp
 from utils.sampling import sample_subset
 from torch.distributions import Normal
@@ -548,7 +547,7 @@ class DNP(nn.Module):
 
     
     def forward(self, batch, num_samples=None, reduce_ll=True):
-        outs = AttrDict()
+        outs = Dict()
         if self.training:
             noise = torch.randn_like(batch.y).to(batch.y.device)
             xc = get_1d_sincos_pos_embed_from_grid(self.posenc_dim, batch.xc.squeeze(-1))

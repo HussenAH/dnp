@@ -10,7 +10,7 @@ import torch.nn as nn
 import math
 import time
 import matplotlib.pyplot as plt
-from attrdict import AttrDict
+from addict import Dict #from attrdict import AttrDict
 from tqdm import tqdm
 from copy import deepcopy
 
@@ -143,7 +143,7 @@ def train(args, model):
             ravg.reset()
 
         if step % args.save_freq == 0 or step == num_steps:
-            ckpt = AttrDict()
+            ckpt = Dict()
             ckpt.model = model.state_dict()
             ckpt.optimizer = optimizer.state_dict()
             ckpt.scheduler = scheduler.state_dict()

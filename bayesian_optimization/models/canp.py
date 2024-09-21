@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 from models.modules import CrossAttnEncoder, Decoder, PoolingEncoder
 
 class CANP(nn.Module):
@@ -47,7 +46,7 @@ class CANP(nn.Module):
         return self.dec(encoded, xt)
 
     def forward(self, batch, num_samples=None, reduce_ll=True):
-        outs = AttrDict()
+        outs = Dict()
         py = self.predict(batch.xc, batch.yc, batch.x)
         ll = py.log_prob(batch.y).sum(-1)
 

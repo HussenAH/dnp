@@ -3,8 +3,7 @@ import numpy as np
 import numpy.random as npr
 import numba as nb
 from tqdm import tqdm
-from _attrdict import AttrDict
-#import pandas as pd
+from addict import Dict #from attrdict import AttrDict#import pandas as pd
 import wget
 
 import os.path as osp
@@ -104,7 +103,7 @@ class LotkaVolterraSimulator(object):
 
         batches = []
         for _ in tqdm(range(num_batches)):
-            batch = AttrDict()
+            batch = Dict()
             x, y, num_ctx = _simulate_task(
                     batch_size, num_steps, max_num_points,
                     self.X0, self.Y0, self.theta0, self.theta1, self.theta2, self.theta3)
@@ -138,7 +137,7 @@ def load_hare_lynx(num_batches, batch_size):
     batches = []
     N = pops.shape[-2]
     for _ in range(num_batches):
-        batch = AttrDict()
+        batch = Dict()
 
         num_ctx = torch.randint(low=15, high=N-15, size=[1]).item()
         num_tar = N - num_ctx

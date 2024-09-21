@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import kl_divergence
-from attrdict import AttrDict
-
+from addict import Dict #from attrdict import AttrDict
 from utils.misc import stack, logmeanexp
 from utils.sampling import sample_subset
 from models.modules import PoolingEncoder, Decoder
@@ -52,7 +51,7 @@ class NP(nn.Module):
         return self.dec(encoded, stack(xt, num_samples))
 
     def forward(self, batch, num_samples=None, reduce_ll=True):
-        outs = AttrDict()
+        outs = Dict()
         if self.training:
             pz = self.lenc(batch.xc, batch.yc)
             qz = self.lenc(batch.x, batch.y)
