@@ -1,0 +1,7 @@
+data_dim: 1
+query_dim: 1 
+ouput_scale: 0.15 
+depth: 3 
+hidden_size: 128 
+clipped_reverse_diffusion: False
+timesteps: 1000
