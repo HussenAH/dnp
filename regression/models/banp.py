@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from attrdict import AttrDict
-
+#from attrdict import AttrDict
+from ..data._attrdict import AttrDict
 from models.canp import CANP
 from utils.misc import stack, logmeanexp
 from utils.sampling import sample_with_replacement as SWR, sample_subset

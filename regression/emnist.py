@@ -10,7 +10,7 @@ import torch.nn as nn
 import math
 import time
 import matplotlib.pyplot as plt
-from attrdict import AttrDict
+from data._attrdict import AttrDict
 from tqdm import tqdm
 from copy import deepcopy
 

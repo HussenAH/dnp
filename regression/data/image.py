@@ -1,5 +1,7 @@
 import torch
-from attrdict import AttrDict
+# from attrdict import AttrDict
+from data._attrdict import AttrDict
+
 from torch.utils.data import DataLoader
 from torch.distributions import StudentT, Normal
 

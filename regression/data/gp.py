@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import MultivariateNormal, StudentT
-from attrdict import AttrDict
+# from attrdict import AttrDict
+from data._attrdict import AttrDict
+
 import math
 
 __all__ = ['GPSampler', 'RBFKernel', 'PeriodicKernel', 'Matern52Kernel']

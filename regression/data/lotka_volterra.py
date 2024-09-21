@@ -3,7 +3,7 @@ import numpy as np
 import numpy.random as npr
 import numba as nb
 from tqdm import tqdm
-from attrdict import AttrDict
+from _attrdict import AttrDict
 #import pandas as pd
 import wget
 
