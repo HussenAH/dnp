@@ -3,6 +3,7 @@ import os.path as osp
 
 import argparse
 import yaml
+import random
 
 import torch
 import torch.nn as nn
@@ -13,47 +14,54 @@ import matplotlib.pyplot as plt
 from addict import Dict #from attrdict import AttrDictfrom tqdm import tqdm
 from copy import deepcopy
 
-from data.image import img_to_task, task_to_img
+from data.image import img_to_task, task_to_img, coord_to_img
 from data.emnist import EMNIST
 
 from utils.misc import load_module, logmeanexp
 from utils.paths import results_path, evalsets_path
 from utils.log import get_logger, RunningAverage
-
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode',
-            choices=['train', 'eval', 'plot', 'ensemble'],
-            default='train')
-    parser.add_argument('--expid', type=str, default='trial')
-    parser.add_argument('--resume', action='store_true', default=False)
-    parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--mode', choices=['train', 'eval', 'plot', 'ensemble'], default='train', help='Specifies the mode in which the script should run')
+    parser.add_argument('--expid', type=str, default='trial', help='Identifier for the experiment')
+    parser.add_argument('--resume', action='store_true', default=False, help='Flag to resume training from the last checkpoint')
+    parser.add_argument('--gpu', type=str, default='0', help='Specifies which GPU to use')
 
-    parser.add_argument('--max_num_points', type=int, default=200)
-    parser.add_argument('--class_range', type=int, nargs='*', default=[0,10])
+    parser.add_argument('--max_num_points', type=int, default=200, help='Maximum number of points to use in the task')
+    parser.add_argument('--class_range', type=int, nargs='*', default=[0, 10], help='Range of classes to use')
 
-    parser.add_argument('--model', type=str, default='cnp')
-    parser.add_argument('--train_batch_size', type=int, default=100)
-    parser.add_argument('--train_num_samples', type=int, default=4)
+    parser.add_argument('--model', type=str, default='cnp', help='Specifies the model to use')
+    parser.add_argument('--train_batch_size', type=int, default=100, help='Batch size for training')
+    parser.add_argument('--train_num_samples', type=int, default=4, help='Number of samples for training')
+    parser.add_argument('--train_target_all', action='store_true', default=False, help='Flag to indicate target_all for training')
 
-    parser.add_argument('--lr', type=float, default=5e-4)
-    parser.add_argument('--num_epochs', type=int, default=200)
-    parser.add_argument('--eval_freq', type=int, default=10)
-    parser.add_argument('--save_freq', type=int, default=10)
+    parser.add_argument('--max_ctx_points', type=int, default=None, help='Maximum number of context points')
 
-    parser.add_argument('--eval_seed', type=int, default=42)
-    parser.add_argument('--eval_batch_size', type=int, default=16)
-    parser.add_argument('--eval_num_samples', type=int, default=50)
-    parser.add_argument('--eval_logfile', type=str, default=None)
+    parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate for the optimizer')
+    parser.add_argument('--num_epochs', type=int, default=200, help='Number of epochs for training')
+    parser.add_argument('--eval_freq', type=int, default=10, help='Frequency of evaluation during training (in epochs)')
+    parser.add_argument('--save_freq', type=int, default=10, help='Frequency of saving checkpoints (in epochs)')
 
-    parser.add_argument('--plot_seed', type=int, default=None)
-    parser.add_argument('--plot_batch_size', type=int, default=16)
-    parser.add_argument('--plot_num_samples', type=int, default=30)
-    parser.add_argument('--plot_num_ctx', type=int, default=100)
+    parser.add_argument('--eval_seed', type=int, default=42, help='Seed for evaluation')
+    parser.add_argument('--eval_batch_size', type=int, default=16, help='Batch size for evaluation')
+    parser.add_argument('--eval_num_samples', type=int, default=50, help='Number of samples for evaluation')
+    parser.add_argument('--eval_logfile', type=str, default=None, help='Log file for evaluation results')
+    parser.add_argument('--eval_target_all', action='store_true', default=False, help='Flag to indicate target_all for evaluation')
+
+    parser.add_argument('--plot_seed', type=int, default=None, help='Seed for plotting')
+    parser.add_argument('--plot_batch_size', type=int, default=16, help='Batch size for plotting')
+    parser.add_argument('--plot_num_samples', type=int, default=30, help='Number of samples for plotting')
+    parser.add_argument('--plot_num_ctx', type=int, default=100, help='Number of context points for plotting')
+    parser.add_argument('--plot_random_samples', action='store_true', default=False, help='Flag to indicate random samples for plotting')
+
 
     # OOD settings
-    parser.add_argument('--t_noise', type=float, default=None)
+    parser.add_argument('--t_noise', type=float, default=None, help='Noise level for out-of-distribution (OOD) settings')
+
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -113,9 +121,12 @@ def train(args, model):
     for epoch in range(start_epoch, args.num_epochs+1):
         model.train()
         for (x, _) in tqdm(train_loader):
+
             batch = img_to_task(x,
-                    max_num_points=args.max_num_points,
+                    max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.train_target_all,
                     device='cuda')
+
+
             optimizer.zero_grad()
             outs = model(batch, num_samples=args.train_num_samples)
             outs.loss.backward()
@@ -131,7 +142,7 @@ def train(args, model):
         logger.info(line)
 
         if epoch % args.eval_freq == 0:
-            logger.info(eval(args, model) + '\n')
+            logger.info(eval(args, model,epoch) + '\n')
 
         ravg.reset()
 
@@ -145,10 +156,9 @@ def train(args, model):
             torch.save(ckpt, osp.join(args.root, 'ckpt.tar'))
 
     args.mode = 'eval'
-    eval(args, model)
+    eval(args, model,args.num_epochs)
 
 def gen_evalset(args):
-
     torch.manual_seed(args.eval_seed)
     torch.cuda.manual_seed(args.eval_seed)
 
@@ -161,7 +171,7 @@ def gen_evalset(args):
     for x, _ in tqdm(eval_loader):
         batches.append(img_to_task(x,
             t_noise=args.t_noise,
-            max_num_points=args.max_num_points))
+            max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all))
 
     torch.manual_seed(time.time())
     torch.cuda.manual_seed(time.time())
@@ -178,7 +188,7 @@ def gen_evalset(args):
 
     torch.save(batches, osp.join(path, filename))
 
-def eval(args, model):
+def eval(args, model,epoch=None):
     if args.mode == 'eval':
         ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
         model.load_state_dict(ckpt.model)
@@ -202,7 +212,6 @@ def eval(args, model):
         filename += f'_{args.t_noise}'
     filename += '.tar'
     if not osp.isfile(osp.join(path, filename)):
-        print('generating evaluation sets...')
         gen_evalset(args)
 
     eval_batches = torch.load(osp.join(path, filename))
@@ -232,7 +241,137 @@ def eval(args, model):
     if logger is not None:
         logger.info(line)
 
+    plot(args, model, eval_batches, suffix=epoch if epoch is not None else '')
+
     return line
+
+
+
+
+
+def plot_images(args, image_pairs, suffix=''):
+    # Determine the number of rows and columns for the subplot grid
+    nrows = max(args.plot_batch_size // 4, 1)
+    ncols = min(4, args.plot_batch_size)
+
+    fig, axes = plt.subplots(nrows, ncols * 3, figsize=(5 * ncols, 5 * nrows))
+    axes = axes.flatten()
+
+    for i, (image_pair) in enumerate(image_pairs):
+        origin, ctx, complete_image = image_pair
+
+        # Convert tensors to numpy arrays
+        # origin_np = origin.squeeze().cpu().numpy()
+        # ctx_np = ctx.squeeze().cpu().numpy()
+        # complete_image_np = complete_image.squeeze().cpu().numpy()
+
+        origin_np = np.clip(origin.squeeze().cpu().numpy().transpose(1, 2, 0), 0, 1)
+        ctx_np = np.clip(ctx.squeeze().cpu().numpy().transpose(1, 2, 0), 0, 1)
+        complete_image_np = np.clip(complete_image.squeeze().cpu().numpy().transpose(1, 2, 0), 0, 1)
+
+        # Plot the original image
+        ax = axes[3 * i]
+        ax.imshow(origin_np)
+        ax.set_title(f'Origin Image {i}')
+        ax.axis('off')
+
+        # Plot the original image
+        ax = axes[3 * i + 1]
+        ax.imshow(ctx_np)
+        ax.set_title(f'Contex Image {i}')
+        ax.axis('off')
+
+        # Plot the complete image
+        ax = axes[3 * i + 2]
+        ax.imshow(complete_image_np)
+        ax.set_title(f'Complete Image {i}')
+        ax.axis('off')
+
+    plt.tight_layout()
+
+    image_name = osp.join(args.root, f'plot_{args.eval_seed}_{suffix}.png')
+    plt.savefig(image_name)
+    print(f"{args.model}:Saved image to {image_name}")
+    plt.show()
+    if args.mode != 'plot':
+        plt.close()
+
+
+def plot(args, model, batch=None, suffix=''):
+    if batch is None:
+        if args.eval_seed is not None:
+            torch.manual_seed(args.eval_seed)
+            torch.cuda.manual_seed(args.eval_seed)
+
+        eval_ds = EMNIST(train=False, class_range=args.class_range)
+        eval_loader = torch.utils.data.DataLoader(eval_ds,
+                batch_size=args.plot_batch_size,
+                shuffle=False, num_workers=4)
+
+
+        if args.plot_random_samples:
+            batches = list(eval_loader)
+
+            # Generate a random index
+            random_index = random.randint(0, len(batches) - 1)
+
+            # Select the random batch
+            batch = batches[random_index]
+
+            # batch = next(iter(eval_loader))
+            batch = img_to_task(batch[0], max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all, device='cuda')
+        else:
+            batch = next(iter(eval_loader))
+    if args.mode == 'plot':
+        suffix = "ckpt"
+        ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
+        model.load_state_dict(ckpt.model)
+        model.eval()
+
+        with torch.no_grad():
+            outs = model(batch, num_samples=args.eval_num_samples)
+            print(f'ctx_ll {outs.ctx_ll.item():.4f}, tar_ll {outs.tar_ll.item():.4f}')
+
+    # print("batch len", batch[0:5])
+    #xp = torch.linspace(-2, 2, 200).cuda()
+    # with torch.no_grad():
+    #     py = model.predict(batch['xc'], batch['yc'], xp.unsqueeze(0).repeat(args.plot_num_samples, 1).unsqueeze(-1))
+    #     mu, sigma = py.mean.squeeze(0), py.scale.squeeze(0)
+
+    # xp = torch.linspace(-2, 2, 200).cuda()
+    images = []
+    with torch.no_grad():
+        if isinstance(batch, list):
+            for b in range(args.plot_batch_size):
+                if args.plot_random_samples:
+                    bb = random.randint(0, len(batch) - 1)
+                    bi = random.randint(0, len(batch[bb]['xc']) - 1)
+                else:
+                    bb = b % len(batch)
+                    bi = b // len(batch)
+
+
+                py = model.predict(batch[bb]['xc'][bi:bi+1], batch[bb]['yc'][bi:bi+1],batch[bb]['xt'][bi:bi+1], num_samples=args.plot_num_samples)
+                yt = py.mean
+
+                task_img, comp_img = task_to_img(batch[bb]['xc'][bi:bi+1], batch[bb]['yc'][bi:bi+1], batch[bb]['xt'][bi:bi+1],yt[0],(1,28,28))
+
+                images.append((task_img, comp_img))
+        else:
+            origin_img = coord_to_img(batch.x, batch.y, (1, 28, 28))
+
+            py = model.predict(batch.xc, batch.yc, batch.xt, num_samples=args.plot_num_samples)
+            yt = py.mean
+
+            ctx_img, comp_img = task_to_img(batch.xc, batch.yc,
+                                             batch.xt, yt[0], (1, 28, 28))
+
+            for i in range(ctx_img.shape[0]):
+                images.append((origin_img[i], ctx_img[i], comp_img[i]))
+        plot_images(args, images, suffix=suffix)
+
+
+
 
 def ensemble(args, model):
     num_runs = 5
@@ -294,6 +433,6 @@ def ensemble(args, model):
     filename += '.log'
     logger = get_logger(osp.join(results_path, 'emnist', args.model, filename), mode='w')
     logger.info(ravg.info())
-
 if __name__ == '__main__':
     main()
+

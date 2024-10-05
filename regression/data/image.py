@@ -2,7 +2,7 @@ import torch
 from addict import Dict #from attrdict import AttrDictfrom torch.utils.data import DataLoader
 from torch.distributions import StudentT, Normal
 
-def img_to_task(img, num_ctx=None,
+def img_to_task(img, num_ctx=None,max_ctx_points=None,
         max_num_points=None, target_all=False, t_noise=None, device=None):
 
     B, C, H, W = img.shape
@@ -18,8 +18,9 @@ def img_to_task(img, num_ctx=None,
 
     batch = Dict()
     max_num_points = max_num_points or num_pixels
+    max_ctx_points = max_ctx_points or max_num_points
     num_ctx = num_ctx or \
-            torch.randint(low=3, high=max_num_points-3, size=[1]).item()
+            torch.randint(low=3, high=max_ctx_points-3, size=[1]).item()
     num_tar = max_num_points - num_ctx if target_all else \
             torch.randint(low=3, high=max_num_points-num_ctx, size=[1]).item()
     num_points = num_ctx + num_tar
@@ -78,6 +79,7 @@ def task_to_img(xc, yc, xt, yt, shape):
     task_img = torch.zeros(B, 3, H, W).to(xc.device)
     task_img[:,2,:,:] = 1.0
     task_img[:,1,:,:] = 0.4
+
     for b in range(B):
         for c in range(3):
             task_img[b,c,xc1[b],xc2[b]] = yc[b,:,min(c,C-1)] + 0.5
@@ -90,3 +92,4 @@ def task_to_img(xc, yc, xt, yt, shape):
     completed_img = completed_img.clamp(0, 1)
 
     return task_img, completed_img
+

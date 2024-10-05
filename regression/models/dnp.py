@@ -1,3 +1,5 @@
+from xml.etree.ElementPath import xpath_tokenizer
+
 import numpy as np
 from itertools import repeat
 import collections.abc
@@ -73,15 +75,15 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=
     return:
     pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
+    grid_h = torch.arange(grid_size, dtype=np.float32)
+    grid_w = torch.arange(grid_size, dtype=np.float32)
+    grid = torch.meshgrid(grid_w, grid_h)  # here w goes first
+    grid = torch.stack(grid, axis=0)
 
     grid = grid.reshape([2, 1, grid_size, grid_size])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = torch.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
 
@@ -89,10 +91,13 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     assert embed_dim % 2 == 0
 
     # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
+    # emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
+    # emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
+    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim , grid[0])  # (H*W, D/2)
+    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim , grid[1])  # (H*W, D/2)
+
+    emb = torch.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
 
 
@@ -116,6 +121,16 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
     emb = torch.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb.reshape(*poshape, -1)
+
+def get_sincos_pos_embed_from_grid(embed_dim, pos):
+    if pos.shape[-1] == 2:  # 2D input
+        assert embed_dim % 2 == 0
+        emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, pos[:, :, 0])
+        emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, pos[:, :, 1])
+        emb = torch.cat([emb_h, emb_w], dim=-1)
+    else:  # 1D input
+        emb = get_1d_sincos_pos_embed_from_grid(embed_dim, pos.squeeze(-1))
+    return emb
 
 class CrossAttention(nn.Module):
 
@@ -392,11 +407,22 @@ class NP_Transformer(nn.Module):
     def forward(self, x, pc, vc, pt, t):
         """
         """
+        # print(x)
+        # print(self.x_embedder)
+
+        # print("x", x.shape)
+        # print("pc", pc.shape)
+        # print("vc",vc.shape)
+        # print("pt", pt.shape)
+
         x = self.x_embedder(x)  # (N, T, D)
         pc = self.pc_embedder(pc)  # (N, T, D)
         vc = self.vc_embedder(vc)  # (N, T, D)
         pt = self.pt_embedder(pt)  # (N, T, D)
         t = self.t_embedder(t)  # (N, T, D)
+
+
+
         x = x + pt
         ctx = vc + pc
 
@@ -421,7 +447,7 @@ class DNP(nn.Module):
                  posenc_dim=40,
                  ouput_scale=0.1, 
                  depth=3, 
-                 hidden_size=256, 
+                 hidden_size=256,
                  timesteps=1000,
                  clipped_reverse_diffusion=True):
         
@@ -527,8 +553,12 @@ class DNP(nn.Module):
         if num_samples is None:
             num_samples = 1
         n_tokens = xt.shape[1]
-        xc = get_1d_sincos_pos_embed_from_grid(self.posenc_dim, xc.squeeze(-1))
-        xt = get_1d_sincos_pos_embed_from_grid(self.posenc_dim, xt.squeeze(-1))
+        # xc = get_2d_sincos_pos_embed_from_grid(self.posenc_dim, xc.squeeze(-1))
+        # xt = get_2d_sincos_pos_embed_from_grid(self.posenc_dim, xt.squeeze(-1))
+
+        xc = get_sincos_pos_embed_from_grid(self.posenc_dim, xc)
+        xt = get_sincos_pos_embed_from_grid(self.posenc_dim, xt)
+
         xc = stack(xc, num_samples).reshape(-1, *xc.shape[1:])            
         yc = stack(yc, num_samples).reshape(-1, *yc.shape[1:])
         xt = stack(xt, num_samples).reshape(-1, *xt.shape[1:])
@@ -550,12 +580,15 @@ class DNP(nn.Module):
         outs = Dict()
         if self.training:
             noise = torch.randn_like(batch.y).to(batch.y.device)
-            xc = get_1d_sincos_pos_embed_from_grid(self.posenc_dim, batch.xc.squeeze(-1))
-            x = get_1d_sincos_pos_embed_from_grid(self.posenc_dim, batch.x.squeeze(-1))
+
+            xc = get_sincos_pos_embed_from_grid(self.posenc_dim, batch.xc)
+            x = get_sincos_pos_embed_from_grid(self.posenc_dim, batch.x)
+
             pred=self.pred_noise(x=batch.y, pt=x, vc=batch.yc, pc=xc, noise=noise)
             outs.loss=nn.MSELoss()(pred,noise)
       
         else:
+            # print("predicting in forward")
             if num_samples is None:
                 num_samples = 1
             py = self.predict(batch.xc, batch.yc, batch.x, num_samples=num_samples)
