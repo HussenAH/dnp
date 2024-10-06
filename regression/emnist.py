@@ -322,12 +322,13 @@ def plot(args, model, batch=None, suffix=''):
             batch = img_to_task(batch[0], max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all, device='cuda')
         else:
             batch = next(iter(eval_loader))
+            batch = img_to_task(batch[0], max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all, device='cuda')
+
     if args.mode == 'plot':
         suffix = "ckpt"
         ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
         model.load_state_dict(ckpt.model)
         model.eval()
-
         with torch.no_grad():
             outs = model(batch, num_samples=args.eval_num_samples)
             print(f'ctx_ll {outs.ctx_ll.item():.4f}, tar_ll {outs.tar_ll.item():.4f}')
