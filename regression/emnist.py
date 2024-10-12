@@ -27,6 +27,8 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--mode', choices=['train', 'eval', 'plot', 'ensemble'], default='train', help='Specifies the mode in which the script should run')
+    parser.add_argument('--next_mode', choices=['train', 'eval', 'plot', 'ensemble', 'stop'], default='eval',
+                        help='Specifies the next mode in which the script should run')
     parser.add_argument('--expid', type=str, default='trial', help='Identifier for the experiment')
     parser.add_argument('--resume', action='store_true', default=False, help='Flag to resume training from the last checkpoint')
     parser.add_argument('--gpu', type=str, default='0', help='Specifies which GPU to use')
@@ -141,7 +143,7 @@ def train(args, model):
         line += ravg.info()
         logger.info(line)
 
-        if epoch % args.eval_freq == 0:
+        if args.next_mode != 'stop' and epoch % args.eval_freq == 0:
             logger.info(eval(args, model,epoch) + '\n')
 
         ravg.reset()
@@ -155,7 +157,9 @@ def train(args, model):
             ckpt.epoch = epoch + 1
             torch.save(ckpt, osp.join(args.root, 'ckpt.tar'))
 
-    args.mode = 'eval'
+    if args.next_mode == 'stop':
+        return
+    args.mode = 'eval' # TODO: args.mode = args.next_mode
     eval(args, model,args.num_epochs)
 
 def gen_evalset(args):
@@ -354,6 +358,8 @@ def plot(args, model, batch=None, suffix=''):
 
                 py = model.predict(batch[bb]['xc'][bi:bi+1], batch[bb]['yc'][bi:bi+1],batch[bb]['xt'][bi:bi+1], num_samples=args.plot_num_samples)
                 yt = py.mean
+                # print('yt shape', yt.shape)
+                # TODO #check the size of the mean, and verify that we need only y[0]
 
                 task_img, comp_img = task_to_img(batch[bb]['xc'][bi:bi+1], batch[bb]['yc'][bi:bi+1], batch[bb]['xt'][bi:bi+1],yt[0],(1,28,28))
 
