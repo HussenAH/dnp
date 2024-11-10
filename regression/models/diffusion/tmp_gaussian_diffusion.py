@@ -273,7 +273,6 @@ class GaussianDiffusion:
         """
         if model_kwargs is None:
             model_kwargs = {}
-
         B, C = x.shape[:2]
         assert t.shape == (B,)
         model_output = model(x, t, **model_kwargs)
@@ -283,11 +282,13 @@ class GaussianDiffusion:
             extra = None
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
-            # assert model_output.shape == (B, C * 2, *x.shape[2:])
-            model_output, model_var_values = th.split(model_output, 1, dim=1)
-            model_output = model_output.squeeze(1)
-            model_var_values = model_var_values.squeeze(1)
 
+            """--------------------- Added -------------------------"""
+            log_var = th.zeros_like(model_output)  # Initialize with zeros, learn this separately
+            model_var_values = log_var.exp()  # To ensure positivity for the variance (exponentiating log variance)
+            model_output = th.cat([model_output.detach(), model_var_values], dim=1)
+            """----------------------------------------------"""
+            model_output, model_var_values = th.split(model_output, C, dim=1)
             min_log = _extract_into_tensor(self.posterior_log_variance_clipped, t, x.shape)
             max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
             # The model_var_values is [-1, 1] for [min_var, max_var].
@@ -417,7 +418,7 @@ class GaussianDiffusion:
         if cond_fn is not None:
             out["mean"] = self.condition_mean(cond_fn, out, x, t, model_kwargs=model_kwargs)
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-        return {"sample": sample, "pred_xstart": out["pred_xstart"], "mean": out["mean"], "log_variance": out["log_variance"]}
+        return {"sample": sample, "pred_xstart": out["pred_xstart"],"mean": out["mean"],"log_variance": out["log_variance"]}
 
     def p_sample_loop(
         self,
@@ -462,7 +463,7 @@ class GaussianDiffusion:
             progress=progress,
         ):
             final = sample
-        return final["sample"], final
+        return final["sample"],final
 
     def p_sample_loop_progressive(
         self,
@@ -560,7 +561,7 @@ class GaussianDiffusion:
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
         sample = mean_pred + nonzero_mask * sigma * noise
-        return {"sample": sample, "pred_xstart": out["pred_xstart","mean":out['mean'],"log_variance": out['log_variance']]}
+        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
     def ddim_reverse_sample(
         self,
@@ -598,8 +599,7 @@ class GaussianDiffusion:
         # Equation 12. reversed
         mean_pred = out["pred_xstart"] * th.sqrt(alpha_bar_next) + th.sqrt(1 - alpha_bar_next) * eps
 
-        # return {"sample": mean_pred, "pred_xstart": out["pred_xstart"]}
-        return {"sample": mean_pred, "pred_xstart": out["pred_xstart","mean":out['mean'],"log_variance": out['log_variance']]}
+        return {"sample": mean_pred, "pred_xstart": out["pred_xstart"]}
 
     def ddim_sample_loop(
         self,
@@ -632,7 +632,7 @@ class GaussianDiffusion:
             eta=eta,
         ):
             final = sample
-        return final["sample"], final
+        return final["sample"]
 
     def ddim_sample_loop_progressive(
         self,
@@ -728,12 +728,12 @@ class GaussianDiffusion:
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
-
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
             noise = th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
+
         terms = {}
 
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
@@ -749,25 +749,33 @@ class GaussianDiffusion:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
             model_output = model(x_t, t, **model_kwargs)
-
             if self.model_var_type in [
                 ModelVarType.LEARNED,
                 ModelVarType.LEARNED_RANGE,
             ]:
-                # print("training_losses x_t.shape", x_t.shape)
-                # print("training_losses model_output.shape", model_output.shape)
-                B, C = x_t.shape[:2]
+                # B, C = x_t.shape[:2]
                 # assert model_output.shape == (B, C * 2, *x_t.shape[2:])
-                model_output, model_var_values = th.split(model_output, 1, dim=1)
-                model_output = model_output.squeeze(1)
-                model_var_values = model_var_values.squeeze(1)
+                # model_output, model_var_values = th.split(model_output, C, dim=1)
+                # # Learn the variance using the variational bound, but don't let
+                # # it affect our mean prediction.
+                # frozen_out = th.cat([model_output.detach(), model_var_values], dim=1)
 
-                # print("training_losses model_output.shape", model_output.shape)
-                # print("training_losses model_var_values.shape", model_var_values.shape)
+                B, C = x_t.shape[:2]
+                assert model_output.shape == (B, C, *x_t.shape[2:])
+
+                # Assuming variance is learned or initialized separately, you can set a log-variance
+                log_var = th.zeros_like(model_output)  # Initialize with zeros, learn this separately
+
+                # You can also define log_var in a more complex manner based on `model_output` if needed.
 
                 # Learn the variance using the variational bound, but don't let
                 # it affect our mean prediction.
-                frozen_out = th.stack([model_output.detach(), model_var_values], dim=1)
+                model_var_values = log_var.exp()  # To ensure positivity for the variance (exponentiating log variance)
+                frozen_out = model_output#th.cat([model_output.detach(), model_var_values], dim=1)
+
+                # print("model_output.shape", model_output.shape)
+                # print("model_var_values.shape", model_var_values.shape)
+
                 terms["vb"] = self._vb_terms_bpd(
                     model=lambda *args, r=frozen_out: r,
                     x_start=x_start,

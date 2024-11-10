@@ -24,6 +24,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 def main():
+    print("script started")
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--mode', choices=['train', 'eval', 'plot', 'ensemble'], default='train', help='Specifies the mode in which the script should run')
@@ -33,7 +34,7 @@ def main():
     parser.add_argument('--resume', action='store_true', default=False, help='Flag to resume training from the last checkpoint')
     parser.add_argument('--gpu', type=str, default='0', help='Specifies which GPU to use')
 
-    parser.add_argument('--max_num_points', type=int, default=200, help='Maximum number of points to use in the task')
+    parser.add_argument('--max_num_points', type=int, default=28*28, help='Maximum number of points to use in the task')
     parser.add_argument('--class_range', type=int, nargs='*', default=[0, 10], help='Range of classes to use')
 
     parser.add_argument('--model', type=str, default='cnp', help='Specifies the model to use')
@@ -96,7 +97,6 @@ def train(args, model):
     train_loader = torch.utils.data.DataLoader(train_ds,
         batch_size=args.train_batch_size,
         shuffle=True, num_workers=4)
-
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=len(train_loader)*args.num_epochs)
@@ -123,12 +123,9 @@ def train(args, model):
     for epoch in range(start_epoch, args.num_epochs+1):
         model.train()
         for (x, _) in tqdm(train_loader):
-
             batch = img_to_task(x,
                     max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.train_target_all,
                     device='cuda')
-
-
             optimizer.zero_grad()
             outs = model(batch, num_samples=args.train_num_samples)
             outs.loss.backward()
@@ -156,6 +153,8 @@ def train(args, model):
             ckpt.logfilename = logfilename
             ckpt.epoch = epoch + 1
             torch.save(ckpt, osp.join(args.root, 'ckpt.tar'))
+
+            print(f"Checkpoint saved at epoch {epoch}")
 
     if args.next_mode == 'stop':
         return
@@ -225,13 +224,18 @@ def eval(args, model,epoch=None):
 
     ravg = RunningAverage()
     model.eval()
+    count = 0
     with torch.no_grad():
         for batch in tqdm(eval_batches):
+            count += 1
+
             for key, val in batch.items():
                 batch[key] = val.cuda()
             outs = model(batch, num_samples=args.eval_num_samples)
             for key, val in outs.items():
                 ravg.update(key, val)
+            if count == 5:
+                break
 
     torch.manual_seed(time.time())
     torch.cuda.manual_seed(time.time())
@@ -302,6 +306,8 @@ def plot_images(args, image_pairs, suffix=''):
 
 
 def plot(args, model, batch=None, suffix=''):
+    print("plotting")
+
     if batch is None:
         if args.eval_seed is not None:
             torch.manual_seed(args.eval_seed)
@@ -326,6 +332,7 @@ def plot(args, model, batch=None, suffix=''):
             batch = img_to_task(batch[0], max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all, device='cuda')
         else:
             batch = next(iter(eval_loader))
+
             batch = img_to_task(batch[0], max_num_points=args.max_num_points,max_ctx_points=args.max_ctx_points,target_all=args.eval_target_all, device='cuda')
 
     if args.mode == 'plot':
@@ -347,6 +354,7 @@ def plot(args, model, batch=None, suffix=''):
     images = []
     with torch.no_grad():
         if isinstance(batch, list):
+            print("list")
             for b in range(args.plot_batch_size):
                 if args.plot_random_samples:
                     bb = random.randint(0, len(batch) - 1)
@@ -367,11 +375,19 @@ def plot(args, model, batch=None, suffix=''):
         else:
             origin_img = coord_to_img(batch.x, batch.y, (1, 28, 28))
 
-            py = model.predict(batch.xc, batch.yc, batch.xt, num_samples=args.plot_num_samples)
-            yt = py.mean
-
+            # print('batch.xc', batch.xc.shape)
+            # print('batch.yc', batch.yc.shape)
+            # print('batch.xt', batch.xt.shape)
+            # print('batch.yt', batch.yt.shape)
+            # print('batch.x', batch.x.shape)
+            # print('batch.y', batch.y.shape)
+            py,_sample = model.predict(batch.xc, batch.yc, batch.xt, num_samples=args.plot_num_samples)
+            yt =_sample# py.mean
+            print('yt shape', yt.shape)
             ctx_img, comp_img = task_to_img(batch.xc, batch.yc,
                                              batch.xt, yt[0], (1, 28, 28))
+
+            print('origin_img', origin_img.shape)
 
             for i in range(ctx_img.shape[0]):
                 images.append((origin_img[i], ctx_img[i], comp_img[i]))

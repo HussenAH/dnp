@@ -3,7 +3,8 @@ import os.path as osp
 import sys
 import random
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..','..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..','..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -274,8 +275,14 @@ def compare_and_plot_patterns(args):
             # model = load_model_checkpoint(model_name, args.chptid, results_path)
             with torch.no_grad():
                 py = model.predict(batch.xc, batch.yc, batch.xt, num_samples=args.plot_num_samples)
-                yt = py.mean
+
+                if type(py) is tuple: # for models that return (mean, variance) tuple
+                    yt = py[1]
+
+                else:
+                    yt = py.mean
                 # yt.shape torch.Size([5, 16, 392, 1])
+                print("yt.shape", yt.shape)
                 for sample_num in range(args.plot_num_samples):
 
                     _, comp_img = task_to_img(batch.xc, batch.yc, batch.xt, yt[sample_num], (1, 28, 28))
